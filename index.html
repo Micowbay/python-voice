@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Authentication System</title>
+</head>
+<body>
+    <h1>Voice Authentication System</h1>
+    
+    <!-- 註冊區 -->
+    <h2>Register Your Voice</h2>
+    <button id="startRegister">Start Recording for Registration</button>
+    <button id="stopRegister" disabled>Stop Recording</button>
+    <br>
+
+    <!-- 登入驗證區 -->
+    <h2>Login with Your Voice</h2>
+    <button id="startLogin">Start Recording for Login</button>
+    <button id="stopLogin" disabled>Stop Recording</button>
+    
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+
+        // 錄音開始和停止的通用邏輯
+        function startRecording(buttonToDisable, buttonToEnable) {
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    mediaRecorder = new MediaRecorder(stream);
+                    mediaRecorder.start();
+                    audioChunks = [];
+
+                    mediaRecorder.addEventListener("dataavailable", event => {
+                        audioChunks.push(event.data);
+                    });
+
+                    document.getElementById(buttonToDisable).disabled = true;
+                    document.getElementById(buttonToEnable).disabled = false;
+                });
+        }
+
+        function stopRecordingAndSendAudio(buttonToDisable, buttonToEnable, route) {
+            mediaRecorder.stop();
+
+            document.getElementById(buttonToDisable).disabled = false;
+            document.getElementById(buttonToEnable).disabled = true;
+
+            mediaRecorder.addEventListener("stop", () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                const formData = new FormData();
+                formData.append("audio", audioBlob, "voice_sample.wav");
+
+                // 用戶輸入 user_id
+                const user_id = prompt("Enter your User ID");
+                formData.append("user_id", user_id);
+
+                // 發送音頻和 user_id 到後端 使用fetch formData 是音頻和 user_id
+                fetch(route, {
+                    method: "POST",
+                    body: formData
+                })
+                .then(response => {
+                    // 確保 response body 有內容，然後再解析成 JSON
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.text().then(text => text ? JSON.parse(text) : {});
+                })
+                .then(data => {
+                    if (data.success) {
+                        alert(data.message);
+                    } else {
+                        alert("Error: " + data.message);
+                    }
+                })
+                .catch(error => {
+                    alert("Error: " + error.message);
+                });
+            });
+        }
+
+        // 註冊錄音按鈕事件
+        document.getElementById("startRegister").addEventListener("click", () => {
+            startRecording("startRegister", "stopRegister");
+        });
+
+        document.getElementById("stopRegister").addEventListener("click", () => {
+            stopRecordingAndSendAudio("startRegister", "stopRegister", "/register");
+        });
+
+        // 登入驗證錄音按鈕事件
+        document.getElementById("startLogin").addEventListener("click", () => {
+            startRecording("startLogin", "stopLogin");
+        });
+
+        document.getElementById("stopLogin").addEventListener("click", () => {
+            stopRecordingAndSendAudio("startLogin", "stopLogin", "/verify-voice");
+        });
+    </script>
+</body>
+</html>
